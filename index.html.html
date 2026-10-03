@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Deriv Over/Under Entry Analyzer</title>
+<style>
+:root{color-scheme:light;--bg:#f3f6fb;--card:#ffffff;--line:#d3dce9;--text:#142033;--muted:#53657d;--blue:#1457b8;--green:#0a7a4b;--greenbg:#d9f3e5;--red:#c42a3b;--amber:#8a5a00;--amberbg:#fff2d6;--soft:#eef3fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:17px;line-height:1.45}
+.wrap{max-width:1050px;margin:auto;padding:18px 14px 50px}h1{font-size:30px;margin:10px 0 4px;color:#0d2a52}.sub{color:var(--muted);margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 2px 10px #1a2d4a14}h2{font-size:21px;margin:0 0 12px;color:#0d2a52}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+label{display:block;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:5px}
+input,select,button{width:100%;border:1.5px solid #b9c7da;border-radius:10px;background:#fff;color:var(--text);padding:13px;font-size:17px}
+button{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700;cursor:pointer}button:active{filter:brightness(.92)}
+button.alt{background:#fff;color:var(--blue);border-color:var(--blue)}
+.status{margin-top:12px;color:var(--muted);font-weight:600}.live{color:var(--green)}.warn{color:var(--amber)}.bad{color:var(--red)}
+.rec{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:10px}.big{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px}
+.big .v{font-size:30px;font-weight:900;margin-top:4px;color:#0d2a52}.k,.tiny{font-size:12px;color:var(--muted);font-weight:600}.note{color:var(--muted);font-size:15px;line-height:1.5;margin-top:10px}
+.verdict{margin-top:12px;padding:12px;border-radius:12px;font-size:16px;line-height:1.5;background:var(--soft);border:1px solid var(--line);color:var(--text)}
+.verdict.ok{background:var(--greenbg);border-color:#7fcba3;color:#06402a}.verdict.ok{font-weight:600}.verdict.no{background:var(--amberbg);border-color:#e6c27a;color:#5e3d00}
+table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:9px 7px;border-bottom:1px solid #e1e8f2;text-align:left;white-space:nowrap}
+th{color:#33475f;position:sticky;top:0;background:#e8eff9;font-weight:700}tr.best{background:#dfeaff;font-weight:600}.scroll{overflow:auto;max-height:440px}
+.pill{padding:3px 8px;border-radius:99px;background:#e8eef6}.pill.g{background:var(--greenbg);color:#08613b;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.market{border:1.5px solid var(--line);border-radius:14px;padding:14px;background:#fbfcfe}
+.mh{display:flex;justify-content:space-between}.digit{font-size:48px;font-weight:900;line-height:1;color:#0d2a52}
+.sig{display:inline-block;padding:5px 10px;border-radius:9px;background:#e8eef6;color:#33475f;font-weight:800;margin-top:6px;font-size:16px}.sig.entry{background:var(--greenbg);color:#08613b}
+@media(max-width:700px){.controls,.rec{grid-template-columns:1fr 1fr}.buttons{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<h1>Deriv Entry-Digit Analyzer</h1>
+<p class="sub">Read-only public tick data. No token, no trades. Statistically tested.</p>
+
+<section class="card"><h2>Settings</h2>
+<div class="controls">
+<div><label>History ticks (50–5000)</label><input id="hist" type="number" min="50" max="5000" value="1000"></div>
+<div style="display:none"><label>Contract</label><select id="ctype"><option value="auto" selected>Auto: best of all 18 contracts</option><option value="over">Over</option><option value="under">Under</option></select></div>
+<div style="display:none"><label>Barrier digit (manual only)</label><input id="pred" type="number" min="0" max="9" value="3"></div>
+<div style="display:none"><label>Payout % (manual contract only)</label><input id="payout" type="number" min="1" max="500" step="0.1" value="63.4"></div>
+<div><label>Min signals to qualify</label><input id="minSig" type="number" min="5" value="30"></div>
+<div><label>Base stake $ (simulator)</label><input id="stake" type="number" min="1" value="10"></div>
+<div><label>Sound + vibration alerts</label><select id="alerts"><option value="on">On</option><option value="off">Off</option></select></div>
+<div><label>Contracts to scan</label><select id="cset"><option value="two" selected>Over 3 + Under 7 only</option><option value="mid">Barriers 3 to 7 (Over &amp; Under)</option><option value="all">All 18</option></select></div>
+<div><label>Lock cycle (seconds)</label><select id="cyc"><option>10</option><option>20</option><option>30</option><option selected>60</option></select></div>
+<div><label>Entry digits</label><select id="mode"><option value="all">All 0–9</option><option value="high">High 5–9</option><option value="low">Low 0–4</option></select></div>
+</div>
+<div class="buttons">
+<button id="bGo">Load 13 markets + Analyze</button><button class="alt" id="bRef">Refresh history</button>
+<button class="alt" id="bPause">Pause live</button><button class="alt" id="bOff">Disconnect</button></div>
+<div id="status" class="status">Disconnected. Press Load.</div>
+<div class="note">For entry digit d: a signal is a tick ending in d; the next tick settles the contract. Each (market, digit) win rate is tested against that market's overall win rate with a one-sided z-test, then corrected for the number of combinations examined (Bonferroni). Changing any setting recomputes instantly.</div>
+</section>
+
+<section class="card"><h2>Best current candidate</h2><div id="phase" class="note" style="margin:0 0 10px;font-size:15px"></div>
+<div class="rec">
+<div class="big"><div class="k">MARKET</div><div class="v" id="bM">—</div><div class="tiny" id="bS"></div></div>
+<div class="big"><div class="k">ENTRY DIGIT</div><div class="v" id="bD">—</div></div>
+<div class="big"><div class="k">HISTORICAL WIN %</div><div class="v" id="bR">—</div><div class="tiny" id="bN"></div></div>
+<div class="big"><div class="k">LIVE CONFIRMATION</div><div class="v" id="bL">—</div><div class="tiny" id="bLs">signals since lock</div></div>
+</div><div id="entryNow" class="verdict"></div><div id="verdict" class="verdict"></div></section>
+
+<section class="card"><h2>Ranking at last lock</h2><div class="note" style="margin:0 0 8px">Ranked on the older 70% of ticks (z, p). <b>Test %</b> is the same digit on the newest 30%, which it never saw. A candidate must also beat break-even there.</div><div class="scroll"><table><thead><tr>
+<th>#</th><th>Market</th><th>Contract</th><th>Entry</th><th>Signals</th><th>W</th><th>L</th><th>Win %</th><th>95% CI</th><th>Base %</th><th>z</th><th>p (adj)</th><th>vs break-even</th><th>Test %</th></tr></thead>
+<tbody id="rank"></tbody></table></div></section>
+
+<section class="card"><h2>Randomness check per market</h2><div id="randSum" class="note" style="margin:0 0 10px"></div><div class="scroll"><table><thead><tr><th>Market</th><th>Ticks</th><th>Digit uniformity p</th><th>Next-digit dependence p</th><th>Verdict</th></tr></thead><tbody id="randTbl"></tbody></table></div>
+<div class="note">Uniformity: are digits 0–9 equally frequent (chi-square, 9 df)? Dependence: does the next digit depend on the current one (chi-square on the 10×10 transition table, 81 df)? Dependence is the one an entry-digit strategy would need. Flagged only if p is below 0.05 / 26 tests (Bonferroni). Updates at each lock.</div></section>
+
+<section class="card"><h2>Pattern scan</h2><div id="patPick" class="verdict"></div><div id="patSum" class="note"></div><div class="scroll"><table><thead><tr><th>Market</th><th>Win after win</th><th>Win after loss</th><th>After-loss p</th><th>Streakiness p</th><th>Verdict</th></tr></thead><tbody id="patTbl"></tbody></table></div>
+<div class="note">Outcome of every tick (win = digit beats your barrier). <b>After-loss p</b>: does a loss change the next result? <b>Streakiness p</b>: do wins and losses clump more than chance (runs test)? Flagged only below 0.05 / 26 tests. For the locked pick, the box above also tests the digit that came before your entry digit.</div></section>
+
+<section class="card"><h2>All 13 markets</h2><div id="markets" class="grid"></div></section>
+
+<section class="card"><h2>Plan simulator</h2><div class="note" style="margin:0 0 8px">Your plan: $stake, then stake + profit on a win, stop on any loss. Uses the locked pick's win rate.</div><div class="scroll"><table><thead><tr><th>Win rate assumed</th><th>Both runs win</th><th>Profit per cycle</th><th>Expected day total*</th></tr></thead><tbody id="sim"></tbody></table></div><div class="note">*Average result of trading cycles until the first loss ends the day. Negative means the plan loses money on average at that win rate.</div></section>
+
+<section class="card"><h2>Track record</h2><div id="trSum" class="note" style="margin:0 0 8px"></div><div class="buttons" style="grid-template-columns:1fr 1fr"><button class="alt" id="bCsv">Export CSV</button><button class="alt" id="bClr">Clear record</button></div><div class="scroll" style="margin-top:10px"><table><thead><tr><th>Time</th><th>Market</th><th>Digit</th><th>Hist %</th><th>Live W/N</th><th>Live %</th></tr></thead><tbody id="trTbl"></tbody></table></div><div class="note">Saved on this device. Each locked pick is logged with how it performed live while it was locked.</div></section>
+
+<section class="card"><h2>Read this</h2><div class="note">
+Deriv synthetic indices come from a certified random generator, so digits are expected to be independent. With over a hundred combinations tested, the top one will look good by chance alone, which is why the adjusted p-value and the live forward test (signals the tool never saw when it chose them) matter more than the headline win %. A rate only pays if it beats break-even (100 / (1 + payout)). Research tool only; not a guarantee.</div><div id="log" class="note"></div></section>
+</div>
+<script>
+const MARKETS=[["Volatility 10 (1s)","1HZ10V"],["Volatility 15 (1s)","1HZ15V"],["Volatility 25 (1s)","1HZ25V"],["Volatility 30 (1s)","1HZ30V"],["Volatility 50 (1s)","1HZ50V"],["Volatility 75 (1s)","1HZ75V"],["Volatility 90 (1s)","1HZ90V"],["Volatility 100 (1s)","1HZ100V"],["Volatility 10","R_10"],["Volatility 25","R_25"],["Volatility 50","R_50"],["Volatility 75","R_75"],["Volatility 100","R_100"]];
+const ENDPOINTS=["wss://api.derivws.com/trading/v1/options/ws/public","wss://ws.derivws.com/websockets/v3?app_id=1089","wss://ws.binaryws.com/websockets/v3?app_id=1089"];
+let gotData=false,watchdog=null;
+const $=id=>document.getElementById(id);
+let ws=null,session=0,epIdx=0,wanted=false,paused=false,retry=null,opened=false,states={},reqMap={};
+const blank=(n,s)=>({name:n,sym:s,pip:null,ticks:[],live:{}});
+function initStates(){states={};MARKETS.forEach(([n,s])=>states[s]=blank(n,s))}
+function setStatus(t,c=""){$("status").className="status "+c;$("status").textContent=t}
+function log(t){$("log").textContent=new Date().toLocaleTimeString()+" — "+t}
+const cfg=()=>({cset:$("cset").value,auto:$("ctype").value==="auto",pred:Math.min(9,Math.max(0,parseInt($("pred").value)||0)),over:$("ctype").value==="over",minSig:Math.max(5,parseInt($("minSig").value)||30),payout:Math.max(1,Number($("payout").value)||60),max:Math.max(50,Math.min(5000,parseInt($("hist").value)||1000))});
+const isWin=(d,c)=>c.over?d>c.pred:d<c.pred;
+const CTS=[];for(let b=0;b<=8;b++)CTS.push({over:true,pred:b});for(let b=1;b<=9;b++)CTS.push({over:false,pred:b});
+const ctKey=ct=>(ct.over?"O":"U")+ct.pred,ctName=ct=>(ct.over?"Over ":"Under ")+ct.pred,ctP=ct=>(ct.over?9-ct.pred:ct.pred)/10;
+const ctBE=(ct,c)=>c.auto?100*ctP(ct)/0.98:100/(1+c.payout/100);
+const ctList=c=>c.auto?CTS.filter(k=>c.cset==="all"||(c.cset==="two"?((k.over&&k.pred===3)||(!k.over&&k.pred===7)):(k.pred>=3&&k.pred<=7))):[{over:c.over,pred:c.pred}];
+const liveOf=(st,ct,d)=>st.live[ctKey(ct)+d]||(st.live[ctKey(ct)+d]={n:0,w:0});
+function digitOf(q,pip){let p=pip!=null?pip:2;return Number(Number(q).toFixed(p).slice(-1))}
+function entryDigits(){const m=$("mode").value;return m==="high"?[5,6,7,8,9]:m==="low"?[0,1,2,3,4]:[0,1,2,3,4,5,6,7,8,9]}
+
+function closeWs(){if(ws){ws.onopen=ws.onmessage=ws.onerror=ws.onclose=null;try{ws.close()}catch(e){}ws=null}clearTimeout(retry)}
+function connect(){
+  closeWs();const my=++session;opened=false;
+  setStatus("Connecting ("+(epIdx+1)+"/"+ENDPOINTS.length+")…","warn");
+  try{ws=new WebSocket(ENDPOINTS[epIdx])}catch(e){return failover(my)}
+  gotData=false;clearTimeout(watchdog);
+  ws.onopen=()=>{if(my!==session)return;opened=true;setStatus("Connected. Loading history…","live");requestHistory();
+    MARKETS.forEach(([n,s])=>send({ticks:s,subscribe:1}));
+    watchdog=setTimeout(()=>{if(my===session&&!gotData){log("Endpoint "+(epIdx+1)+" connected but sent no data; trying next.");failover(my)}},8000)};
+  ws.onmessage=e=>{if(my!==session)return;gotData=true;handle(JSON.parse(e.data))};
+  ws.onclose=ev=>{if(my!==session)return;if(!wanted)return setStatus("Disconnected.");
+    log("Endpoint "+(epIdx+1)+" closed (code "+ev.code+(opened?"":", never opened")+").");
+    if(!opened||!gotData)return failover(my);setStatus("Connection lost. Reconnecting…","bad");retry=setTimeout(()=>{if(wanted&&my===session)connect()},2000)};
+}
+function failover(my){if(my!==session)return;epIdx=(epIdx+1)%ENDPOINTS.length;
+  if(epIdx===0)setStatus("All endpoints failed. Check network/VPN or WebSocket blocking. Retrying…","bad");
+  retry=setTimeout(()=>{if(wanted&&my===session)connect()},epIdx===0?4000:500)}
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function requestHistory(){const c=cfg();MARKETS.forEach(([n,s],i)=>{const id=1000+i;reqMap[id]=s;
+  send({ticks_history:s,end:"latest",count:c.max,style:"ticks",req_id:id})})}
+
+function handle(d){
+  if(d.error){log("API error: "+(d.error.message||"unknown"));return}
+  if(d.msg_type==="history"&&d.history){
+    const sym=reqMap[d.req_id]||(d.echo_req&&d.echo_req.ticks_history),st=states[sym];if(!st)return;
+    st.pip=d.pip_size!=null?d.pip_size:st.pip;const p=d.history.prices||[],t=d.history.times||[];
+    st.ticks=p.map((q,i)=>({epoch:t[i],digit:digitOf(q,st.pip)}));
+    setStatus("Live"+(paused?" (paused)":"")+". "+Object.values(states).filter(x=>x.ticks.length).length+"/13 markets loaded.","live");render();
+  }else if(d.msg_type==="tick"&&d.tick){
+    if(paused)return;const st=states[d.tick.symbol||d.tick.underlying_symbol||(d.echo_req&&d.echo_req.ticks)];if(!st)return;
+    if(d.tick.pip_size!=null)st.pip=d.tick.pip_size;
+    const last=st.ticks[st.ticks.length-1],dg=digitOf(d.tick.quote,st.pip);
+    if(last&&last.epoch>=d.tick.epoch)return;
+    if(last){for(const ct of ctList(cfg())){const r=liveOf(st,ct,last.digit);r.n++;if(isWin(dg,ct))r.w++}}
+    st.ticks.push({epoch:d.tick.epoch,digit:dg});
+    const max=cfg().max;while(st.ticks.length>max)st.ticks.shift();
+    render();
+  }
+}
+
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);
+  return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x))}
+const normCdf=z=>0.5*(1+erf(z/Math.SQRT2));
+function wilson(w,n){if(!n)return[0,0];const z=1.96,p=w/n,d=1+z*z/n,c=p+z*z/(2*n),m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return[(c-m)/d*100,(c+m)/d*100]}
+
+function compute(){
+  const c=cfg(),rows=[],markets={},cts=ctList(c),all=[0,1,2,3,4,5,6,7,8,9],m10=()=>Array.from({length:10},()=>Array(10).fill(0));
+  const sum=(M,ds,f)=>{let n=0,w=0;for(const d of ds)for(let e=0;e<10;e++){n+=M[d][e];if(f(e))w+=M[d][e]}return[n,w]};
+  for(const st of Object.values(states)){
+    const t=st.ticks,cut=Math.floor((t.length-1)*0.7),A=m10(),Tr=m10(),Te=m10();
+    for(let i=0;i<t.length-1;i++){const a=t[i].digit,b=t[i+1].digit;A[a][b]++;(i<cut?Tr:Te)[a][b]++}
+    for(const ct of cts){const f=e=>isWin(e,ct),be=ctBE(ct,c),[N,W]=sum(A,all,f),[TN,TW]=sum(Tr,all,f),base=N?W/N:0,tb=TN?TW/TN:0;
+      if(!c.auto)markets[st.sym]={base:base*100,N};
+      for(const d of entryDigits()){const [n,w]=sum(A,[d],f);if(n<5)continue;const [rn,rw]=sum(Tr,[d],f),[en,ew]=sum(Te,[d],f);
+        const z=rn?(rw/rn-tb)/Math.sqrt(Math.max(tb*(1-tb),1e-9)/rn):0;
+        rows.push({st,d,n,w,l:n-w,rate:w/n*100,base:base*100,z,p:1-normCdf(z),ci:wilson(w,n),be,tn:en,tw:ew,ct})}}
+  }
+  const K=rows.length||1;rows.forEach(r=>r.adj=Math.min(1,r.p*K));rows.sort((a,b)=>b.z-a.z);
+  return{rows,markets,c,be:c.auto?0:ctBE(cts[0],c),K};
+}
+
+let record=[];try{record=JSON.parse(localStorage.getItem("dtrack")||"[]")}catch(e){}
+const saveRec=()=>{try{localStorage.setItem("dtrack",JSON.stringify(record.slice(-500)))}catch(e){}};
+let ac=null,lastEntryEp=0;
+function ping(msg){if($("alerts").value!=="on")return;document.title=msg;try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){}
+  try{if(ac){const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=0.2;o.start();o.stop(ac.currentTime+0.35)}}catch(e){}}
+function logLock(l){const lv=liveOf(l.r.st,l.r.ct,l.r.d),n=lv.n-l.snap.n,w=lv.w-l.snap.w;if(n<1)return;record.push({t:Date.now(),m:l.r.st.sym,c:ctName(l.r.ct),d:l.r.d,hr:+l.r.rate.toFixed(1),n,w});saveRec()}
+function evCycle(p,pay,S){const q=p*p,W=S*pay+S*(1+pay)*pay,ev=q*W-(1-q)*S;return{q,ev,day:q<1?q/(1-q)*W-S:Infinity}}
+function extras(R){
+  const c=R.c,BEx=lock?lock.r.be:R.be,S=Math.max(1,Number($("stake").value)||10),pay=lock?100/lock.r.be-1:c.payout/100;
+  const rates=lock?[["Pick, low end of 95% CI",lock.r.ci[0]],["Pick, historical rate",lock.r.rate],["Pick, high end of 95% CI",lock.r.ci[1]],["No edge ("+(ctP(lock.r.ct)*100)+"%)",ctP(lock.r.ct)*100]]:[["No edge (60%)",60]];
+  $("sim").innerHTML=rates.map(([n,v])=>{const e=evCycle(v/100,pay,S);return `<tr><td>${n}: ${v.toFixed(1)}%</td><td>${(e.q*100).toFixed(0)}%</td><td>${e.ev>=0?"+":"-"}$${Math.abs(e.ev).toFixed(2)}</td><td>${e.day>=0?"+":"-"}$${Math.abs(e.day).toFixed(2)}</td></tr>`}).join("");
+  const rows=[...record];if(lock){const lv=liveOf(lock.r.st,lock.r.ct,lock.r.d),n=lv.n-lock.snap.n;if(n>0)rows.push({t:Date.now(),m:lock.r.st.sym,c:ctName(lock.r.ct),d:lock.r.d,hr:+lock.r.rate.toFixed(1),n,w:lv.w-lock.snap.w,open:1})}
+  const tn=rows.reduce((a,r)=>a+r.n,0),tw=rows.reduce((a,r)=>a+r.w,0);
+  $("trSum").innerHTML=rows.length?`<b>${rows.length}</b> locked picks, <b>${tw}/${tn}</b> live wins = <b>${(tw/tn*100).toFixed(1)}%</b> vs break-even ${(lock?lock.r.be:BEx).toFixed(1)}%.`:"No locked picks recorded yet.";
+  $("trTbl").innerHTML=rows.slice(-15).reverse().map(r=>`<tr><td>${new Date(r.t).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}${r.open?" (open)":""}</td><td>${r.m} ${r.c||''}</td><td>${r.d}</td><td>${r.hr}%</td><td>${r.w}/${r.n}</td><td>${(r.w/r.n*100).toFixed(0)}%</td></tr>`).join("");
+}
+let patRows=[],patPick=null;
+const z2=(w1,n1,w2,n2)=>{if(n1<5||n2<5)return null;const p1=w1/n1,p2=w2/n2,p=(w1+w2)/(n1+n2),se=Math.sqrt(p*(1-p)*(1/n1+1/n2));return se?(p1-p2)/se:null};
+const p2s=z=>z==null?null:2*(1-normCdf(Math.abs(z)));
+function patterns(){
+  const c=lock?lock.r.ct:(cfg().auto?{over:true,pred:3}:cfg());
+  patRows=MARKETS.map(([n,sym])=>{const t=states[sym].ticks,N=t.length;if(N<300)return{n,sym,short:true};
+    const o=t.map(x=>isWin(x.digit,c)?1:0);let n1=0,R=1;o.forEach((v,i)=>{n1+=v;if(i&&v!==o[i-1])R++});const n2=N-n1;
+    const mu=2*n1*n2/N+1,vr=(mu-1)*(mu-2)/(N-1),zr=vr>0?(R-mu)/Math.sqrt(vr):0;
+    let ww=0,wn=0,lw=0,ln=0;for(let i=1;i<N;i++){if(o[i-1]){wn++;ww+=o[i]}else{ln++;lw+=o[i]}}
+    return{n,sym,N,pw:wn?ww/wn*100:0,pl:ln?lw/ln*100:0,pr:p2s(zr),pa:p2s(z2(lw,ln,ww,wn))}});
+  patPick=null;if(!lock)return;
+  const r=lock.r,t=r.st.ticks,res=[],prev=[];
+  for(let i=0;i<t.length-1;i++)if(t[i].digit===r.d){res.push(isWin(t[i+1].digit,c)?1:0);prev.push(i?t[i-1].digit:-1)}
+  let ww=0,wn=0,lw=0,ln=0,cur=0,mx=0;
+  for(let k=0;k<res.length;k++){if(k){if(res[k-1]){wn++;ww+=res[k]}else{ln++;lw+=res[k]}}if(res[k]===0){cur++;mx=Math.max(mx,cur)}else cur=0}
+  const g=Array.from({length:10},()=>({n:0,w:0}));res.forEach((v,k)=>{if(prev[k]>=0){g[prev[k]].n++;g[prev[k]].w+=v}});
+  const gn=g.filter(x=>x.n>0),T=gn.reduce((a,x)=>a+x.n,0),TW=gn.reduce((a,x)=>a+x.w,0);let chi=0;
+  gn.forEach(x=>{const ew=x.n*TW/T,el=x.n*(T-TW)/T;if(ew>0)chi+=(x.w-ew)**2/ew;if(el>0)chi+=((x.n-x.w)-el)**2/el});
+  const n=res.length,q=1-r.rate/100;
+  patPick={r,n,pw:wn?ww/wn*100:null,wn,pl:ln?lw/ln*100:null,ln,pa:p2s(z2(lw,ln,ww,wn)),pd:gn.length>1&&TW>0&&TW<T?chiP(chi,gn.length-1):null,mx,typ:n>0&&q>0&&n*q>1?Math.log(n*q)/Math.log(1/q):0};
+}
+function renderPat(){
+  const A=0.05/26,f=r=>r==null?"—":r.toFixed(3),rows=patRows.filter(r=>!r.short),hit=rows.filter(r=>r.pa<A||r.pr<A),raw=rows.filter(r=>r.pa<0.05||r.pr<0.05);
+  $("patSum").innerHTML=patRows.length?"<b>"+hit.length+" of "+MARKETS.length+" markets show a significant pattern.</b> "+raw.length+" have a raw p&lt;0.05; about 1 in 20 tests does that by chance.":"Runs at each lock.";
+  $("patTbl").innerHTML=patRows.map(r=>r.short?`<tr><td>${r.n}</td><td colspan="5">need 300+ ticks</td></tr>`:`<tr><td>${r.n} <span class="tiny">${r.sym}</span></td><td>${r.pw.toFixed(1)}%</td><td>${r.pl.toFixed(1)}%</td><td>${f(r.pa)}</td><td>${f(r.pr)}</td><td>${r.pa<A||r.pr<A?"⚠️ PATTERN":(r.pa<0.05||r.pr<0.05)?"🟡 borderline (likely chance)":"✅ none"}</td></tr>`).join("");
+  const P=patPick,B=$("patPick");
+  if(!P){B.className="verdict";B.textContent="Pattern test for the locked pick appears once a pick is locked.";return}
+  const flag=(P.pa!=null&&P.pa<0.025)||(P.pd!=null&&P.pd<0.025);
+  B.className="verdict "+(flag?"no":"");
+  B.innerHTML="<b>Locked pick: "+P.r.st.sym+" entry "+P.r.d+"</b> ("+P.n+" signals in history)<br>After a loss: "+(P.pl==null?"—":P.pl.toFixed(0)+"% win ("+P.ln+" cases)")+" • after a win: "+(P.pw==null?"—":P.pw.toFixed(0)+"% win ("+P.wn+" cases)")+" • p = "+f(P.pa)+"<br>Effect of the digit before your entry: p = "+f(P.pd)+"<br>Longest losing streak seen: <b>"+P.mx+"</b>; typical for "+P.n+" signals: about <b>"+P.typ.toFixed(1)+"</b>. Losing streaks that long are normal, so size your trading for them.<br>"+(flag?"⚠️ Below 0.025, but this is one pick among many and the signal count is small. Treat it as noise unless it keeps appearing at later locks.":"No pattern for this pick beyond chance.");
+}
+let randRows=[];
+const chiP=(x,k)=>{const m=2/(9*k),z=(Math.pow(x/k,1/3)-(1-m))/Math.sqrt(m);return Math.min(1,Math.max(0,1-normCdf(z)))};
+function randomness(){
+  return MARKETS.map(([n,sym])=>{const t=states[sym].ticks,N=t.length;
+    if(N<500)return{n,sym,N,short:true};
+    const cnt=Array(10).fill(0),tr=Array.from({length:10},()=>Array(10).fill(0)),rs=Array(10).fill(0),cs=Array(10).fill(0);
+    t.forEach(x=>cnt[x.digit]++);let M=0;
+    for(let i=0;i<N-1;i++){tr[t[i].digit][t[i+1].digit]++;rs[t[i].digit]++;cs[t[i+1].digit]++;M++}
+    let c1=0;cnt.forEach(c=>c1+=(c-N/10)**2/(N/10));
+    let c2=0;for(let a=0;a<10;a++)for(let b=0;b<10;b++){const e=rs[a]*cs[b]/M;if(e>0)c2+=(tr[a][b]-e)**2/e}
+    return{n,sym,N,p1:chiP(c1,9),p2:chiP(c2,81)}});
+}
+let lock=null,snapRows=[],cycleLeft=0,phase="wait",streak=0;
+const cyc=()=>parseInt($("cyc").value)||30;
+const same=(a,b)=>a&&b&&a.st.sym===b.st.sym&&a.d===b.d;
+function qualifies(r,c,be){return r.n>=c.minSig&&r.z>0&&r.rate>r.be&&r.tn>=8&&r.tw/r.tn*100>r.be}
+function resetAnalysis(){Object.values(states).forEach(st=>st.live={});lock=null;snapRows=[];randRows=[];patRows=[];patPick=null;streak=0;phase="wait"}
+function evaluate(){
+  const R=compute(),q=R.rows.filter(r=>qualifies(r,R.c,0));let pick=q[0]||null;
+  if(lock&&pick){const cur=q.find(r=>same(r,lock.r));if(cur&&pick.z<cur.z+0.5)pick=cur}
+  if(lock&&!(pick&&same(pick,lock.r)))logLock(lock);
+  if(pick&&lock&&same(pick,lock.r)){streak++;lock.r=pick;lock.kept=true}
+  else if(pick){streak=1;const l=liveOf(pick.st,pick.ct,pick.d);lock={r:pick,snap:{n:l.n,w:l.w},kept:false}}
+  else{lock=null;streak=0}
+  snapRows=R.rows.slice(0,40);randRows=randomness();patterns();phase="locked";cycleLeft=cyc();
+}
+setInterval(()=>{
+  const loaded=Object.values(states).filter(s=>s.ticks.length>50).length;
+  if(!wanted||!loaded)phase="wait";
+  else if(phase==="wait"){phase="analyzing";cycleLeft=10}
+  else if(!paused){cycleLeft--;if(cycleLeft<=0)evaluate()}
+  render();
+},1000);
+
+function render(){
+  const R=compute(),c=R.c,side=c.over?"Over":"Under",V=$("verdict"),BEx=lock?lock.r.be:R.be;
+  if(phase==="wait")$("phase").textContent="Waiting for market data…";
+  else if(phase==="analyzing")$("phase").innerHTML="🔎 <b>ANALYZING MARKETS…</b> "+(10-cycleLeft)+"/10 s • "+MARKETS.length+" markets • "+R.K+" entry combinations tested";
+  else $("phase").innerHTML=(paused?"⏸ Paused. ":"🔒 <b>RECOMMENDATION LOCKED</b> • ")+"next analysis in <b>"+cycleLeft+"s</b>"+(lock?(lock.kept?" • same pick kept ×"+streak:" • new pick"):"");
+  $("entryNow").style.display="none";
+  if(phase!=="locked"||!lock){
+    ["bD","bR","bL"].forEach(i=>$(i).textContent="—");$("bS").textContent="";$("bN").textContent="";$("bLs").textContent="signals since lock";
+    $("bM").textContent=phase==="locked"?"NO TRADE":"—";
+    V.className="verdict"+(phase==="locked"?" no":"");
+    V.innerHTML=phase==="locked"?"<b>No qualifying candidate.</b> Nothing has at least "+c.minSig+" signals, a win rate above the market baseline, and a win rate above break-even ("+(c.auto?"the contract's break-even":BEx.toFixed(1)+"%")+"). Waiting is a valid decision.":"Collecting live ticks before the first recommendation.";
+  }else{
+    const r=lock.r,st=r.st,lv=liveOf(st,r.ct,r.d),ln=lv.n-lock.snap.n,lw=lv.w-lock.snap.w,done=ln>=c.minSig;
+    $("bM").textContent=st.name;$("bS").textContent=st.sym+" • "+ctName(r.ct);$("bD").textContent=r.d;
+    $("bR").textContent=r.rate.toFixed(1)+"%";$("bN").textContent=r.n+" signals, "+r.w+"W/"+r.l+"L • "+ctName(r.ct);
+    $("bL").textContent=ln?(lw/ln*100).toFixed(0)+"% ("+lw+"/"+ln+")":"0/0";
+    const lowB=ln?wilson(lw,ln)[0]:0,hi=ln&&lw/ln*100>BEx,sure=done&&lowB>BEx;const badge=!done?"⏳ CONFIRMING "+ln+"/"+c.minSig+" live signals":(sure?"✅ CONFIRMED (live lower bound "+lowB.toFixed(0)+"% beats break-even)":hi?"🟡 INCONCLUSIVE: above break-even, but within noise (live lower bound "+lowB.toFixed(0)+"%)":"❌ FAILED live test");
+    $("bLs").textContent=badge;
+    if(sure&&!lock.confF){lock.confF=true;ping("🚨 CONFIRMED: "+st.sym+" "+ctName(r.ct)+" entry "+r.d)}
+    V.className="verdict "+(sure?"ok":done?"no":"");
+    V.innerHTML="<b>"+badge+"</b><br>Adjusted p = "+r.adj.toFixed(3)+" across "+R.K+" combinations • 95% CI "+r.ci[0].toFixed(0)+"–"+r.ci[1].toFixed(0)+"% • break-even "+BEx.toFixed(1)+"% • held for "+streak+" cycle"+(streak>1?"s":"")+".<br>"+(r.adj<0.05?"Statistically notable in history.":"Not statistically distinguishable from chance yet; rely on the live confirmation.");
+    const last=st.ticks.length?st.ticks[st.ticks.length-1].digit:null,E=$("entryNow");E.style.display="block";
+    E.className="verdict "+(last===r.d?"ok":"");E.innerHTML=last===r.d?"🟢 <b>ENTRY NOW</b>: "+st.sym+" just ended on digit "+r.d+".":"Waiting for "+st.sym+" to end on digit <b>"+r.d+"</b> (currently "+(last==null?"—":last)+").";
+    const ep=st.ticks.length?st.ticks[st.ticks.length-1].epoch:0;if(last===r.d&&sure&&ep!==lastEntryEp){lastEntryEp=ep;ping("🟢 ENTRY NOW: "+st.sym+" "+ctName(r.ct)+" digit "+r.d)}
+  }
+  extras(R);renderPat();
+  $("rank").innerHTML=snapRows.map((r,i)=>`<tr class="${lock&&same(r,lock.r)?'best':''}"><td>${i+1}</td><td>${r.st.sym}</td><td>${ctName(r.ct)}</td><td><b>${r.d}</b></td><td>${r.n}</td><td>${r.w}</td><td>${r.l}</td>
+    <td><span class="pill ${r.rate>r.be?'g':''}">${r.rate.toFixed(1)}%</span></td><td>${r.ci[0].toFixed(0)}–${r.ci[1].toFixed(0)}</td><td>${r.base.toFixed(1)}</td>
+    <td>${r.z.toFixed(2)}</td><td>${r.adj.toFixed(3)}</td><td>${(r.rate-r.be>=0?"+":"")+(r.rate-r.be).toFixed(1)} pp</td><td>${r.tn?(r.tw/r.tn*100).toFixed(0)+'% ('+r.tw+'/'+r.tn+')':'—'}</td></tr>`).join("");
+
+  const A=0.05/26,flag=randRows.filter(r=>!r.short&&(r.p1<A||r.p2<A)),raw=randRows.filter(r=>!r.short&&(r.p1<0.05||r.p2<0.05));
+  $("randSum").innerHTML=randRows.length?(randRows.some(r=>r.short)?"Some markets have too few ticks (need 500+).<br>":"")+"<b>"+flag.length+" of "+MARKETS.length+" markets show a significant deviation from randomness.</b> "+raw.length+" have a raw p&lt;0.05; with 26 tests about 1 is expected by chance alone."+(flag.length?"":" No market gives an entry-digit strategy anything to exploit."):"Runs at each lock (after the first analysis).";
+  $("randTbl").innerHTML=randRows.map(r=>r.short?`<tr><td>${r.n}</td><td>${r.N}</td><td colspan="3">need 500+ ticks</td></tr>`:`<tr><td>${r.n} <span class="tiny">${r.sym}</span></td><td>${r.N}</td><td>${r.p1.toFixed(3)}</td><td>${r.p2.toFixed(3)}</td><td>${r.p1<A||r.p2<A?"⚠️ DEVIATES":(r.p1<0.05||r.p2<0.05)?"🟡 borderline (likely chance)":"✅ random-like"}</td></tr>`).join("");
+  $("markets").innerHTML=MARKETS.map(([n,s])=>{const st=states[s],m=R.markets[s]||{base:0,N:0};
+    const last=st.ticks.length?st.ticks[st.ticks.length-1].digit:null,mine=lock&&lock.r.st.sym===s&&phase==="locked",entry=mine&&last===lock.r.d;
+    return `<div class="market" style="${mine?'border-color:#0a7a4b;border-width:2.5px':''}"><div class="mh"><div><b>${n}</b><div class="tiny">${s} • ${st.ticks.length} ticks</div></div><div class="digit">${last==null?"—":last}</div></div>
+    <span class="sig ${entry?'entry':''}">${entry?"ENTRY "+lock.r.d:mine?"LOCKED • wait "+lock.r.d:"WAIT"}</span>
+    <div class="note">${m.base!=null?"Market overall "+side+" "+c.pred+": "+m.base.toFixed(1)+"%":""}</div></div>`}).join("");
+}
+
+$("bGo").onclick=()=>{try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}try{navigator.wakeLock&&navigator.wakeLock.request("screen")}catch(e){}
+  initStates();resetAnalysis();wanted=true;paused=false;$("bPause").textContent="Pause live";epIdx=0;render();connect()};
+$("bRef").onclick=()=>{if(ws&&ws.readyState===1){requestHistory();setStatus("Refreshing history…","warn")}else if(wanted)connect()};
+$("bPause").onclick=()=>{paused=!paused;$("bPause").textContent=paused?"Resume live":"Pause live";
+  if(!paused&&ws&&ws.readyState===1)requestHistory();setStatus(paused?"Live feed paused (analysis frozen).":"Resumed. Refreshing history…",paused?"warn":"live")};
+$("bOff").onclick=()=>{wanted=false;session++;closeWs();setStatus("Disconnected.")};
+["pred","ctype","payout","minSig","mode","cset"].forEach(i=>$(i).addEventListener("input",()=>{resetAnalysis();render()}));
+$("bClr").onclick=()=>{if(confirm("Delete the saved track record?")){record=[];saveRec();render()}};
+$("bCsv").onclick=()=>{const h="time,market,contract,digit,hist_rate,live_wins,live_n\n",b=record.map(r=>[new Date(r.t).toISOString(),r.m,r.c||"",r.d,r.hr,r.w,r.n].join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([h+b],{type:"text/csv"}));a.download="deriv_track_record.csv";a.click()};
+["stake","alerts"].forEach(i=>$(i).addEventListener("input",render));
+$("cyc").addEventListener("change",()=>{if(phase==="locked")cycleLeft=cyc()});
+$("hist").addEventListener("change",()=>{Object.values(states).forEach(st=>{const m=cfg().max;while(st.ticks.length>m)st.ticks.shift()});if(ws&&ws.readyState===1)requestHistory();render()});
+initStates();render();
+</script></body></html>
